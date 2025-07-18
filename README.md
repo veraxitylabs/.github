@@ -1,3 +1,0 @@
-# Veraxity Labs
-
-Hello
