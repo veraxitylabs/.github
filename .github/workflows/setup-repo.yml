@@ -1,0 +1,100 @@
+name: Repository Setup
+
+on: create
+
+jobs:
+  create-environments:
+    if: github.event.ref == github.event.master_branch
+    name: Create Environments
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Environments
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          # Create the environments.
+          gh api "repos/$REPO_NAME/environments/development" --method PUT
+          gh api "repos/$REPO_NAME/environments/staging" --method PUT
+          gh api "repos/$REPO_NAME/environments/production" --method PUT
+
+  # This job sets the branch protection rules for the 'dev', 'prod', and 'release/*' branches.
+  set-branch-protection:
+    if: github.event.ref == github.event.master_branch
+    name: Set Branch Protection Rules
+    runs-on: ubuntu-latest
+    needs: create-environments
+    steps:
+      - name: Set Protection for 'dev' Branch
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          REPO_NAME: ${{ github.event.repository.full_name }}
+        run: |
+          # This API call now uses the correct syntax for status checks and mirrors the PDF settings.
+          gh api --method PUT "repos/$REPO_NAME/branches/dev/protection" \
+            -f "required_pull_request_reviews[required_approving_review_count]=1" \
+            -f "required_pull_request_reviews[dismiss_stale_reviews]=false" \
+            -f "bypass_pull_request_allowances[users[]]=Trevypants" \
+            -f "required_status_checks[strict]=false" \
+            -f "required_status_checks[contexts[]]=Check PR Branch Targets" \
+            -f "required_status_checks[contexts[]]=Code Quality" \
+            -f "required_status_checks[contexts[]]=Lint Commit Messages" \
+            -f "required_status_checks[contexts[]]=Pulumi Preview" \
+            -f "required_status_checks[contexts[]]=Pulumi Deploy" \
+            -f "required_status_checks[contexts[]]=Check Branch Naming Convention" \
+            -f "enforce_admins=null" \
+            -f "required_conversation_resolution=true" \
+            -f "restrictions=null" \
+            -f "allow_force_pushes=false" \
+            -f "allow_deletions=false"
+
+      - name: Set Protection for 'prod' Branch
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          REPO_NAME: ${{ github.event.repository.full_name }}
+        run: |
+          # This API call now uses the correct syntax and mirrors the PDF settings for prod.
+          gh api --method PUT "repos/$REPO_NAME/branches/prod/protection" \
+            -f "required_pull_request_reviews[dismiss_stale_reviews]=true" \
+            -f "required_pull_request_reviews[require_code_owner_reviews]=false" \
+            -f "required_pull_request_reviews[required_approving_review_count]=1" \
+            -f "required_pull_request_reviews[require_last_push_approval]=true" \
+            -f "bypass_pull_request_allowances[users[]]=Trevypants" \
+            -f "required_status_checks[strict]=true" \
+            -f "required_status_checks[contexts[]]=Setup Deployment Info" \
+            -f "required_status_checks[contexts[]]=Setup Preview Info" \
+            -f "required_status_checks[contexts[]]=Code Quality" \
+            -f "required_status_checks[contexts[]]=Lint Commit Messages" \
+            -f "required_status_checks[contexts[]]=Check Branch Naming Convention" \
+            -f "required_status_checks[contexts[]]=Check PR Branch Targets" \
+            -f "required_status_checks[contexts[]]=Pulumi Preview" \
+            -f "required_status_checks[contexts[]]=Pulumi Deploy" \
+            -f "required_deployment_environments[contexts[]]=staging" \
+            -f "enforce_admins=true" \
+            -f "required_conversation_resolution=true" \
+            -f "restrictions=null" \
+            -f "allow_force_pushes=false" \
+            -f "allow_deletions=false"
+
+      - name: Set Protection for 'release/*' Branches
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          REPO_NAME: ${{ github.event.repository.full_name }}
+        run: |
+          # This API call now uses the correct syntax and mirrors the PDF settings for staging/release.
+          # Note: The branch name 'release/*' must be URL encoded to 'release%2F*'.
+          gh api --method PUT "repos/$REPO_NAME/branches/release%2F*/protection" \
+            -f "required_pull_request_reviews=null" \
+            -f "bypass_pull_request_allowances[users[]]=Trevypants" \
+            -f "required_status_checks[strict]=false" \
+            -f "required_status_checks[contexts[]]=Check Branch Naming Convention" \
+            -f "required_status_checks[contexts[]]=Check PR Branch Targets" \
+            -f "required_status_checks[contexts[]]=Code Quality" \
+            -f "required_status_checks[contexts[]]=Pulumi Deploy" \
+            -f "required_status_checks[contexts[]]=Pulumi Preview" \
+            -f "required_status_checks[contexts[]]=Lint Commit Messages" \
+            -f "enforce_admins=null" \
+            -f "required_conversation_resolution=false" \
+            -f "restrictions=null" \
+            -f "allow_force_pushes=false" \
+            -f "allow_deletions=false"
